@@ -312,6 +312,77 @@ def patch_body(output_text: str) -> str:
     return "\n".join("- " + raw for _, raw, _ in entries)
 
 
+def parse_issue_body(body: str) -> dict[str, str]:
+    """GitHub 이슈 폼 본문을 '### 제목' 단위로 나눈다."""
+    sections: dict[str, str] = {}
+    current: str | None = None
+    buf: list[str] = []
+    for line in body.replace("\r\n", "\n").splitlines():
+        if line.startswith("### "):
+            if current:
+                sections[current] = "\n".join(buf).strip()
+            current, buf = line[4:].strip(), []
+        elif current is not None:
+            buf.append(line)
+    if current:
+        sections[current] = "\n".join(buf).strip()
+    return sections
+
+
+def issue_chapter(sections: dict[str, str]) -> int | None:
+    m = re.search(r"\d+", sections.get("회차", ""))
+    return int(m.group()) if m else None
+
+
+def issue_quotes(sections: dict[str, str]) -> list[str]:
+    quotes = []
+    for line in sections.get("문제 부분", "").splitlines():
+        text = line.strip().lstrip(">").strip()
+        if text and text != "_No response_":
+            quotes.append(text)
+    return quotes
+
+
+def summarize_issues(project: Project, issues: list[dict]) -> list[dict]:
+    """이슈를 회차별 작업 항목으로 바꾼다. 인용 실존은 운영자에게만 알린다."""
+    summaries = []
+    for issue in issues:
+        sections = parse_issue_body(issue.get("body") or "")
+        ch = issue_chapter(sections)
+        quotes = issue_quotes(sections)
+        draft = project.draft_path(ch) if ch else None
+        text = read_text(draft) if draft and draft.exists() else ""
+        missing = [q for q in quotes if not (text and quote_in(q, text))]
+        summaries.append({
+            "number": issue.get("number"),
+            "url": issue.get("url", ""),
+            "title": issue.get("title", ""),
+            "chapter": ch,
+            "quotes": quotes,
+            "missing": missing,
+            "note": sections.get("뭐가 이상한지", "").strip(),
+            "draft_exists": bool(text),
+        })
+    return summaries
+
+
+def fetch_issues(project: Project, label: str | None, state: str = "open") -> list[dict]:
+    cfg = project.config.get("review", {})
+    exe = shutil.which(cfg.get("gh_binary", "gh"))
+    if not exe:
+        raise HarnessError("gh 실행 파일을 찾지 못했다. GitHub CLI가 필요하다.")
+    cmd = [exe, "issue", "list", "--state", state, "--limit", str(cfg.get("limit", 100)),
+           "--json", "number,title,body,url,labels"]
+    if cfg.get("repo"):
+        cmd += ["--repo", cfg["repo"]]
+    if label:
+        cmd += ["--label", label]
+    proc = subprocess.run(cmd, capture_output=True)
+    if proc.returncode != 0:
+        raise HarnessError("gh issue list 실패: " + proc.stderr.decode("utf-8", "replace").strip())
+    return json.loads(proc.stdout.decode("utf-8") or "[]")
+
+
 def events_context(project: Project, ch: int, cast: list[str]) -> tuple[str, str]:
     path = project.events_path
     if not path.exists():
@@ -765,6 +836,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--review-run")
     p.add_argument("--extract-run")
 
+    p = sub.add_parser("issues", help="리뷰 이슈를 읽어 회차별 작업 목록으로 만든다")
+    p.add_argument("--chapter", type=int)
+    p.add_argument("--label", help="기본값은 config의 review.label")
+    p.add_argument("--state", default="open")
+
     p = sub.add_parser("approve", help="[사람 전용] 원고와 기록안을 함께 승인한다")
     p.add_argument("chapter", type=int)
     p.add_argument("--run", required=True, help="extract run id")
@@ -803,6 +879,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"status: {meta['status']}")
         elif args.cmd == "check":
             return _print_issues(check(project, args.chapter, args.review_run, args.extract_run))
+        elif args.cmd == "issues":
+            label = args.label if args.label is not None else project.config.get("review", {}).get("label")
+            items = summarize_issues(project, fetch_issues(project, label, args.state))
+            if args.chapter is not None:
+                items = [i for i in items if i["chapter"] == args.chapter]
+            if not items:
+                print("해당 이슈 없음")
+            for item in sorted(items, key=lambda x: (x["chapter"] or 0, x["number"] or 0)):
+                head = f"#{item['number']} {item['chapter']}화" if item["chapter"] else f"#{item['number']} (회차 미상)"
+                print(f"\n[{head}] {item['url']}")
+                print(f"  인용 {len(item['quotes'])}개 중 원고에서 확인 {len(item['quotes']) - len(item['missing'])}개")
+                for quote in item["missing"]:
+                    print(f"  [warn] 원고에서 찾지 못한 인용(작성자에게 되돌리지 말 것): {quote[:60]}")
+                if not item["draft_exists"]:
+                    print("  [warn] 해당 회차 원고가 없다")
+                if item["note"]:
+                    print("  지적: " + item["note"].replace("\n", "\n        "))
         elif args.cmd == "approve":
             confirm = args.confirm
             if confirm is None and sys.stdin.isatty():

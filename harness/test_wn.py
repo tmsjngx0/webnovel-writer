@@ -182,6 +182,22 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(self.project.events_path.read_text(encoding="utf-8"), original_events)
         self.assertEqual(wn.commit(self.project, 1, run_id), "committed")
 
+    def test_issue_summary_flags_missing_quote_only_to_operator(self):
+        issues = [
+            {"number": 7, "title": "[리뷰] 3화", "url": "u1",
+             "body": "### 회차\n\n1화\n\n### 문제 부분\n\n> \"이건 팔 수 없어.\"\n\n### 뭐가 이상한지\n\n너무 빨리 결정한다.\n"},
+            {"number": 8, "title": "[리뷰]", "url": "u2",
+             "body": "### 회차\n\n1\n\n### 문제 부분\n\n반지를 끼었다\n\n### 뭐가 이상한지\n\n앞과 안 맞음\n"},
+            {"number": 9, "title": "[리뷰]", "url": "u3", "body": "본문만 있고 폼이 아님"},
+        ]
+        summaries = {s["number"]: s for s in wn.summarize_issues(self.project, issues)}
+        self.assertEqual(summaries[7]["chapter"], 1)
+        self.assertEqual(summaries[7]["missing"], [])
+        self.assertEqual(summaries[7]["note"], "너무 빨리 결정한다.")
+        self.assertEqual(summaries[8]["missing"], ["반지를 끼었다"])
+        self.assertIsNone(summaries[9]["chapter"])
+        self.assertFalse(summaries[9]["draft_exists"])
+
     def test_text_outside_blocks_blocks_commit(self):
         run_id = self.extract_run()
         wn.approve(self.project, 1, run_id, "ch0001 승인")

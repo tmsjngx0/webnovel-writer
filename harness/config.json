@@ -3,6 +3,12 @@
   "previous_chapter_max_chars": 8000,
   "events_max_chars": 30000,
   "recent_event_chapters": 5,
+  "review": {
+    "repo": "tmsjngx0/mahwan-muhyup",
+    "label": "정합성",
+    "limit": 100,
+    "gh_binary": "gh"
+  },
   "codex": {
     "binary": "codex",
     "sandbox": "read-only",
