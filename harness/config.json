@@ -1,0 +1,13 @@
+{
+  "char_count_with_spaces": {"min": 4500, "max": 7000},
+  "previous_chapter_max_chars": 8000,
+  "events_max_chars": 30000,
+  "recent_event_chapters": 5,
+  "codex": {
+    "binary": "codex",
+    "sandbox": "read-only",
+    "ephemeral": true,
+    "model": null,
+    "extra_args": []
+  }
+}

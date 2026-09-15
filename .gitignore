@@ -1,9 +1,11 @@
-.claude/
+.claude/*
+!.claude/skills/
 .agents/
 .codex/
 .gemini/
 .trellis/
-AGENTS.md
+.ft/
+harness/*.tmp
 
 # Python caches & virtualenv
 __pycache__/

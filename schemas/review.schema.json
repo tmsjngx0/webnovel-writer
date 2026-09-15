@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings"],
+  "properties": {
+    "summary": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "severity", "quote", "claim", "basis", "suggestion"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["지식·시점", "시간선", "소유·위치", "부상·상태", "마환 규칙", "신규 설정", "공개 범위", "반복 해결", "인과·선택", "관계 변화", "문체", "기타"]
+          },
+          "severity": {"type": "string", "enum": ["오류", "의심", "편집의견"]},
+          "quote": {"type": "string"},
+          "claim": {"type": "string"},
+          "basis": {"type": "string"},
+          "suggestion": {"type": "string"}
+        }
+      }
+    }
+  }
+}
