@@ -4,6 +4,10 @@
 
 ## 공통 규칙 (Claude Code, 대화형 Codex 모두)
 
+### 호칭
+
+모든 응답은 "선배,"로 시작한다.
+
 ### 커밋
 
 1. **커밋 메시지에 AI attribution을 넣지 않는다.** `Co-Authored-By: Claude ...`, `Claude-Session: ...`, `Generated with Claude Code`, 로봇 이모지 전부 금지. 이 규칙은 도구 기본값보다 우선한다.
