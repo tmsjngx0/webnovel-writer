@@ -312,12 +312,22 @@ def patch_body(output_text: str) -> str:
     return "\n".join("- " + raw for _, raw, _ in entries)
 
 
+def strip_html_comments(body: str) -> str:
+    """이슈 본문에서 HTML 주석을 지운다.
+
+    Markdown 이슈 템플릿(.github/ISSUE_TEMPLATE/review.md)의 안내문은 주석으로
+    남아 제출된 본문에 그대로 들어온다. 지우지 않으면 "예: 3"의 3이 회차로
+    읽히고, 안내문이 인용으로 잡혀 원고에 없는 인용으로 보고된다.
+    """
+    return re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+
+
 def parse_issue_body(body: str) -> dict[str, str]:
-    """GitHub 이슈 폼 본문을 '### 제목' 단위로 나눈다."""
+    """GitHub 이슈 본문을 '### 제목' 단위로 나눈다. YAML 폼과 Markdown 템플릿 모두 같다."""
     sections: dict[str, str] = {}
     current: str | None = None
     buf: list[str] = []
-    for line in body.replace("\r\n", "\n").splitlines():
+    for line in strip_html_comments(body).replace("\r\n", "\n").splitlines():
         if line.startswith("### "):
             if current:
                 sections[current] = "\n".join(buf).strip()

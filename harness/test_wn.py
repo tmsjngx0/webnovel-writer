@@ -198,6 +198,27 @@ class HarnessTest(unittest.TestCase):
         self.assertIsNone(summaries[9]["chapter"])
         self.assertFalse(summaries[9]["draft_exists"])
 
+    def test_markdown_template_comments_are_ignored(self):
+        """Markdown 이슈 템플릿의 안내 주석이 회차와 인용으로 새지 않는다."""
+        body = (
+            "### 회차\n\n"
+            "<!-- 몇 화인지 숫자만 적어도 됩니다. 예: 3 -->\n"
+            "1\n\n"
+            "### 문제 부분\n\n"
+            "<!-- 원고에서 그 부분을 한두 문장 그대로 복사해 붙여 주세요. -->\n"
+            "\"이건 팔 수 없어.\"\n\n"
+            "### 뭐가 이상한지\n\n"
+            "<!-- 형식 없이 편하게 적어 주세요. -->\n"
+            "너무 빨리 결정한다.\n"
+        )
+        summary = wn.summarize_issues(self.project, [
+            {"number": 11, "title": "[리뷰] ", "url": "u", "body": body},
+        ])[0]
+        self.assertEqual(summary["chapter"], 1)
+        self.assertEqual(summary["quotes"], ['"이건 팔 수 없어."'])
+        self.assertEqual(summary["missing"], [])
+        self.assertEqual(summary["note"], "너무 빨리 결정한다.")
+
     def test_text_outside_blocks_blocks_commit(self):
         run_id = self.extract_run()
         wn.approve(self.project, 1, run_id, "ch0001 승인")
