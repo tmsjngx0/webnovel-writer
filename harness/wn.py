@@ -322,6 +322,74 @@ def strip_html_comments(body: str) -> str:
     return re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
 
 
+def parse_extract_sections(output_text: str) -> dict[str, str]:
+    """extract 출력을 '## 제목' 단위로 나눈다."""
+    sections: dict[str, str] = {}
+    current: str | None = None
+    buf: list[str] = []
+    for line in output_text.replace("\r\n", "\n").splitlines():
+        if line.startswith("## "):
+            if current:
+                sections[current] = "\n".join(buf).strip()
+            current, buf = line[3:].strip(), []
+        elif current is not None:
+            buf.append(line)
+    if current:
+        sections[current] = "\n".join(buf).strip()
+    return sections
+
+
+def canon_review_body(sections: dict[str, str], ch: int, run_id: str) -> str | None:
+    """설정 추가 의심·관계 메모를 사람이 체크박스로 검토할 이슈 본문으로 만든다.
+
+    둘 다 비어 있으면 이슈로 만들 게 없다는 뜻으로 None을 돌려준다.
+    """
+    def items(section: str) -> list[str]:
+        lines = [line.strip() for line in sections.get(section, "").splitlines() if line.strip()]
+        return [line for line in lines if line.lstrip("- ").strip() != "없음"]
+
+    suspects = items("설정 추가 의심")
+    relations = items("관계 메모")
+    if not suspects and not relations:
+        return None
+    parts = [
+        f"`python harness/wn.py run extract {ch}` (run: `{run_id}`) 결과 중 canon에 없는 "
+        f"설정 추가 의심과 관계 메모. 채택하면 사람이 `story/canon.md`/`story/relations.md`에 반영한다. "
+        f"원문은 `runs/{run_id}/output.md`.",
+    ]
+    if suspects:
+        parts.append("### 설정 추가 의심\n\n" + "\n".join(f"- [ ] {line.lstrip('- ').strip()}" for line in suspects))
+    if relations:
+        parts.append("### 관계 메모\n\n" + "\n".join(f"- [ ] {line.lstrip('- ').strip()}" for line in relations))
+    parts.append("이 이슈는 승인·반영(`wn.py approve`/`commit`)을 막지 않는다 — 판단만 여기서 기록으로 남긴다.")
+    return "\n\n".join(parts)
+
+
+def file_canon_review(project: Project, ch: int, run_id: str) -> str | None:
+    """extract 결과에서 설정 추가 의심·관계 메모를 GitHub 이슈로 만든다. 낼 게 없으면 None."""
+    meta = project.load_meta(run_id)
+    if meta["stage"] != "extract" or meta["chapter"] != ch:
+        raise HarnessError(f"{run_id}은 {ch}화 extract run이 아니다")
+    output = project.run_dir(run_id) / "output.md"
+    if not output.exists():
+        raise HarnessError("extract 출력이 없다")
+    body = canon_review_body(parse_extract_sections(read_text(output)), ch, run_id)
+    if body is None:
+        return None
+    cfg = project.config.get("review", {})
+    exe = shutil.which(cfg.get("gh_binary", "gh"))
+    if not exe:
+        raise HarnessError("gh 실행 파일을 찾지 못했다. GitHub CLI가 필요하다.")
+    cmd = [exe, "issue", "create", "--title", f"{ch}화 설정 추가 의심 검토 (extract {run_id})",
+           "--body", body]
+    if cfg.get("repo"):
+        cmd += ["--repo", cfg["repo"]]
+    proc = subprocess.run(cmd, capture_output=True)
+    if proc.returncode != 0:
+        raise HarnessError("gh issue create 실패: " + proc.stderr.decode("utf-8", "replace").strip())
+    return proc.stdout.decode("utf-8").strip()
+
+
 def parse_issue_body(body: str) -> dict[str, str]:
     """GitHub 이슈 본문을 '### 제목' 단위로 나눈다. YAML 폼과 Markdown 템플릿 모두 같다."""
     sections: dict[str, str] = {}
@@ -861,6 +929,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run", required=True)
     p.add_argument("--revise", action="store_true")
 
+    p = sub.add_parser("file-review", help="extract의 설정 추가 의심·관계 메모를 GitHub 이슈로 만든다")
+    p.add_argument("chapter", type=int)
+    p.add_argument("--run", required=True, help="extract run id")
+
     sub.add_parser("recover", help="중단된 반영을 백업으로 되돌린다")
     sub.add_parser("status", help="회차별 반영 상태")
 
@@ -921,6 +993,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"주의: 이후 회차 {later}의 기록은 수정 전 원고를 전제로 했을 수 있다. 검수가 필요하다.")
             if result != "noop":
                 print("wn 반영은 Git 커밋이 아니다. 확인 후 직접: git add chapters state runs && git commit")
+        elif args.cmd == "file-review":
+            url = file_canon_review(project, args.chapter, args.run)
+            print(url if url else "설정 추가 의심·관계 메모 없음 — 낼 이슈가 없다")
         elif args.cmd == "recover":
             restored = recover(project)
             print("복구: " + (", ".join(restored) if restored else "중단된 반영 없음"))

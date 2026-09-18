@@ -219,6 +219,22 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(summary["missing"], [])
         self.assertEqual(summary["note"], "너무 빨리 결정한다.")
 
+    def test_canon_review_body_none_when_nothing_to_report(self):
+        sections = wn.parse_extract_sections(PATCH)
+        self.assertIsNone(wn.canon_review_body(sections, 1, "run-1"))
+
+    def test_canon_review_body_lists_suspects_and_relations(self):
+        output = PATCH.replace(
+            "## 설정 추가 의심\n- 없음\n",
+            "## 설정 추가 의심\n- 표국 장부\n- 촌장\n\n## 관계 메모\n- 도석이 서준을 걱정함\n",
+        )
+        sections = wn.parse_extract_sections(output)
+        body = wn.canon_review_body(sections, 1, "run-1")
+        self.assertIn("- [ ] 표국 장부", body)
+        self.assertIn("- [ ] 촌장", body)
+        self.assertIn("- [ ] 도석이 서준을 걱정함", body)
+        self.assertIn("run-1", body)
+
     def test_text_outside_blocks_blocks_commit(self):
         run_id = self.extract_run()
         wn.approve(self.project, 1, run_id, "ch0001 승인")
