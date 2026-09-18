@@ -54,24 +54,26 @@ python harness/wn.py issues --chapter N
 
 ### 세션 안에서
 
+0. 공유 체크아웃에서 바로 브랜치를 만들지 않는다. `wf start <이슈번호>`로 그 이슈 전용 워크트리를 열고 거기서 이어간다.
 1. `python harness/wn.py issues --chapter N` — 이슈 작업 목록과 인용 확인
 2. `python harness/wn.py run review N` — Codex 검수(이슈와 별개로 규칙 위반을 찾는다)
 3. `python harness/wn.py check N --review-run <id>` — 인용 실존 확인
 4. 사람이 채택/기각을 정한다. 결정과 이유는 `runs/<review-run>/decisions.md`에 적는다.
 5. 채택한 것만 `drafts/chNNNN.md`에 반영한다.
 6. `python harness/wn.py run extract N` → `python harness/wn.py check N --extract-run <id>`
+6-1. 설정 추가 의심 또는 관계 메모가 있으면 `python harness/wn.py file-review N --run <extract-run-id>`로 이슈를 만들어 사람이 체크박스로 판단하게 한다.
 7. **사람이** `approve` → `commit`
-8. 브랜치와 PR
+8. 브랜치와 PR — 0에서 연 워크트리에서 그대로 진행한다.
 
 ```bash
-git switch -c rev/chNNNN
+wt step diff   # 브랜치를 딴 뒤 바뀐 것 전체를 한 번에 확인
 git add drafts/chNNNN.md chapters/ state/ runs/
 git commit -m "fix(chNNNN): 이슈 반영"   # 본문에 Closes #12, Closes #15
 git push private HEAD
-gh pr create --repo tmsjngx0/mahwan-muhyup --base main --head rev/chNNNN
+gh pr create --repo tmsjngx0/mahwan-muhyup --base main --head <워크트리 브랜치>
 ```
 
-PR을 merge하면 이슈가 닫히고, 어느 원고 hash가 승인됐는지는 `state/ledger.jsonl`과 run 기록에 남는다.
+merge는 `wt merge`/`wf done`의 자동 병합이 아니라 GitHub PR 화면에서 사람이 한다 — 원고 리뷰는 사람이 읽는 게 전제다. PR을 merge하면 이슈가 닫히고, 어느 원고 hash가 승인됐는지는 `state/ledger.jsonl`과 run 기록에 남는다. merge 뒤 `wf done --close`로 워크트리를 정리한다.
 
 ### 세션 끝
 

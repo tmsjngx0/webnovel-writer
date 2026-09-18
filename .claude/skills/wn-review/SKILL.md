@@ -10,6 +10,8 @@ argument-hint: "<회차 번호>"
 
 ## 0. 세션 시작 점검
 
+이 저장소는 여러 세션이 공유하는 메인 체크아웃이다. 아직 전용 워크트리에서 시작한 게 아니면(`git worktree list`로 확인), 이 회차를 반영할 이슈 번호로 `wf start <이슈번호>`를 열어 그 워크트리에서 이어간다 — 공유 체크아웃에서 직접 브랜치를 만들지 않는다(전역 규칙, 2026-08-13 사고 참고). 이슈가 여러 개면 대표 이슈 하나로 연다.
+
 ```bash
 python harness/wn.py status
 python harness/wn.py issues --chapter N
@@ -47,6 +49,8 @@ python harness/wn.py run extract N
 python harness/wn.py check N --extract-run <id>
 ```
 
+설정 추가 의심 또는 관계 메모가 있으면 `python harness/wn.py file-review N --run <id>`로 GitHub 이슈를 만든다. 사람이 이슈에서 체크박스로 판단한다.
+
 ## 6. 승인·반영 (사람이 실행)
 
 ```
@@ -56,13 +60,17 @@ python harness/wn.py check N --extract-run <id>
 
 ## 7. PR
 
+0에서 `wf start`로 워크트리를 열었으면 브랜치는 이미 있다 — `git switch -c` 없이 그 워크트리에서 커밋한다. `wt step diff`로 브랜치를 딴 뒤 바뀐 것 전체를 한 번 확인하고 커밋한다.
+
 ```bash
-git switch -c rev/chNNNN
+wt step diff
 git add drafts/chNNNN.md chapters state runs
 git commit   # 본문 끝에 Closes #<이슈번호> 를 반영한 이슈마다 적는다
 git push private HEAD
-gh pr create --repo tmsjngx0/mahwan-muhyup --base main --head rev/chNNNN
+gh pr create --repo tmsjngx0/mahwan-muhyup --base main --head <워크트리 브랜치>
 ```
+
+merge는 `wt merge`(자동 병합)가 아니라 GitHub PR로 사람이 한다 — 이 저장소는 원고 리뷰를 PR 화면에서 사람이 읽는 걸 전제로 한다. merge 뒤 `wf done --close`로 워크트리를 정리한다.
 
 merge는 사람이 한다. merge되면 이슈가 닫힌다.
 

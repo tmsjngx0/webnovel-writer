@@ -54,8 +54,7 @@ python harness/wn.py check N --extract-run <extract-run-id>
 ```
 
 기록안의 `## 기록`, `## 설정 추가 의심`, `## 관계 메모`를 보여준다.
-- 설정 추가 의심 → 사람이 판단. 승인하면 사람이 canon에 반영, 아니면 원고 수정.
-- 관계 메모 → 사람이 `story/relations.md`에 반영할지 결정.
+- 설정 추가 의심 또는 관계 메모가 있으면 `python harness/wn.py file-review N --run <extract-run-id>`로 GitHub 이슈를 만든다. 사람이 이슈에서 체크박스로 판단한다. 채택하면 사람이 canon/`story/relations.md`에 반영, 아니면 원고 수정.
 - 기록 항목의 수정은 `runs/<id>/output.md`를 직접 고친 뒤 check를 다시 돌린다.
 
 ## 6. 승인·반영 (사람이 실행)
