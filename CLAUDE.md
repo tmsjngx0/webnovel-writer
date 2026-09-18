@@ -19,6 +19,7 @@
 2. **`codex exec resume`, 특히 `--last`를 쓰지 않는다.** 한 run은 한 번의 독립 호출이다. 파이프라인 재개는 `wn.py status`와 `runs/*/meta.json`을 기준으로 한다.
 3. **`wn.py approve`와 `wn.py commit`은 실행하지 않는다.** 사람에게 `! python harness/wn.py approve N --run <id>` 형태로 직접 실행하도록 안내한다. 확인 문구(`chNNNN 승인`)는 과속방지턱일 뿐 기술적으로 사람을 보증하지 않으므로, 이 규칙이 실제 방어선이다.
 4. **`story/canon.md`, `story/story-contract.md`는 사람이 명시적으로 지시한 내용만 고친다.** Codex나 Claude의 새 설정 제안은 `story/ideas.md`에 `[제안]`으로 적는다.
+   `story/style.md`는 다르다. 고칠 내용을 먼저 보여 주고 사람의 확인을 받은 뒤 Claude가 직접 고친다(2026-09-18, #5). 확인 없이 먼저 고치지 않는다.
 5. **`state/events.md`를 손으로 편집하지 않는다.** 반영은 `wn.py commit`만 한다. 블록 밖 텍스트가 있으면 commit이 거부된다.
 6. 검수 결과를 보여줄 때는 `wn.py check N --review-run <id>` 결과를 함께 보여준다. **인용이 원고에 존재한다는 것은 지적이 옳다는 뜻이 아니다.** 각 지적에 대해 채택/보류/기각을 사람이 정하게 한다.
 7. 원고 후보(`drafts/`) 수정은 사람의 지시에 따른다. 채택·기각한 지적과 이유를 `runs/<review-run>/decisions.md`에 적는다.
