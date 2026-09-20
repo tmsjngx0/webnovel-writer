@@ -1,12 +1,12 @@
 # 아키텍처 v2 — 다작품 집필 하네스
 
-한 저장소, 여러 작품. 하네스는 공개하지 않는다. 이 문서는 현재 구조(작품 한 편 전용)를 다작품 하네스로 다시 짠 설계다.
+한 저장소, 여러 작품, 여러 장르(무협과 판타지), 동시 집필. 하네스는 공개하지 않는다. 이 문서는 현재 구조(작품 한 편 전용)를 다시 짠 설계다.
 
 ## 왜 지금인가
 
 1화도 아직 `chapters/`에 없고 run은 4개다. 원고 자산이 사실상 없으므로 재구성 비용이 거의 0이다. `Project` 클래스는 이미 모든 경로를 `self.path()` 경유로 만들기 때문에 다작품화에 필요한 코드 변경은 루트 해석 한 군데다.
 
-100화쯤에서 깨지는 것(복선 유실, 인물이 아직 모르는 걸 아는 것)은 그때 고치면 이전 회차를 전부 다시 읽어야 한다. 지금 자리를 잡아 둔다.
+100화쯤에서 깨지는 것(복선 유실, 인물이 아직 모르는 걸 아는 것, 사흘 거리를 하루에 가는 것)은 그때 고치면 이전 회차를 전부 다시 읽어야 한다. 지금 자리를 잡아 둔다.
 
 ## 레이아웃
 
@@ -14,30 +14,34 @@
 webnovel-writer/
   harness/
     wn.py              orchestration
-    lint.py            한국어 AI 티 린터 (결정론적, 모델 없음)
+    lint.py            한국어 AI 티 린터 (결정론적)
     continuity.py      결정론적 정합성 검사
+    worldcheck.py      결정론적 세계관 구멍 검사
     config.json        전 작품 공통 기본값
-  prompts/             단계별 지시 기본값
+  prompts/             단계별 지시. 전 장르 공통
+  genres/
+    무협/
+      canon-schema.md  설정에 반드시 있어야 하는 항목
+      checklist.md     세계관 구멍 질문지
+      prompts/         공통 prompts/를 덮어씀
+      lint-rules.json  장르 전용 린트 규칙 추가분
+    판타지/
+      (같은 구조)
   schemas/
   library/             拆文 결과. 작품 공용 자산
     <작품명>/
       source/          남의 원고. gitignore
       분석.md
       모듈.md          재사용 가능한 플롯 단위
-  research/            시장 조사 결과. 작품 공용
+  research/            랭킹 트렌드 조사 결과. 작품 공용
     2026-09-문피아-무협.md
-  spikes/
-    <날짜>-<슬러그>/README.md
   runs/<run_id>/       모든 실행 기록. 작품 구분은 meta.json의 work 필드
   docs/
-    architecture.md    이 문서
-    prior-art.md       참고한 다른 하네스와 훔친 것
-    workflow-issues.md
   works/
     mahwan-muhyup/
-      work.json        작품별 설정. harness/config.json을 덮어씀
-      prompts/         있으면 기본 prompts/를 덮어씀
-      plots/           기획 원본
+      work.json        genre, status, 설정 덮어쓰기
+      prompts/         있으면 장르 것을 다시 덮어씀
+      plots/
       story/           contract, canon, outline, style, relations, ideas
       drafts/
       chapters/
@@ -46,31 +50,60 @@ webnovel-writer/
 
 작품 추가는 `works/<slug>/work.json` 하나 만드는 것이다. 하네스는 `works/*/work.json`을 스캔해서 목록을 만든다. 등록 파일을 따로 두지 않는다. 드리프트할 것이 없다.
 
+## 스파이크는 폴더가 아니라 작품 상태다
+
+"이 작품 쓸까 말까"를 1화 써 보고 판단하는 것이 스파이크다. 별도 `spikes/` 디렉터리를 두면 살리기로 할 때 폴더를 옮겨야 하고, 옮기는 순간 경로가 박힌 run 기록이 어긋난다.
+
+`work.json`에 상태를 둔다.
+
+```json
+{"genre": "무협", "status": "spike"}
+```
+
+- `spike` — 타진 중. `design`과 `draft`까지 돈다. `approve`와 `commit`은 막힌다. 확정 원고와 상태 기록을 만들지 않는다.
+- `active` — 집필 중. 전 단계가 돈다.
+- `retired` — 접었다. 아무것도 안 돈다. 기록은 남는다.
+
+승격은 `status`를 `active`로 고치는 것이다. 파일은 한 개도 안 움직인다. 접는 것도 같다. `wn.py status`는 상태별로 묶어서 보여준다.
+
+스파이크가 여러 편 동시에 돌아도 상관없다. ledger가 작품별(`works/<slug>/state/ledger.jsonl`)이라 승인 상태는 이미 격리돼 있다.
+
 ## 루트 두 개
 
 지금 `Project.root` 하나가 전부를 가리킨다. 두 개로 나눈다.
 
 | | 무엇 | 누가 공유하나 |
 |---|---|---|
-| `Project.home` | harness, prompts, schemas, library, research, runs | 전 작품 |
-| `Project.work` | story, drafts, chapters, state | 한 작품 |
+| `Project.home` | harness, prompts, genres, schemas, library, research, runs | 전 작품 |
+| `Project.work` | story, drafts, chapters, state, plots | 한 작품 |
 
-작품 선택 순서: `--work <slug>` 플래그, 없으면 cwd가 `works/<slug>/` 아래면 그 작품, 없으면 작품이 하나뿐일 때 그것, 아니면 에러.
+작품 선택 순서: `--work <slug>` 플래그, 없으면 cwd가 `works/<slug>/` 아래면 그 작품, 아니면 에러. 동시 집필이므로 "작품이 하나뿐이면 그것"은 두지 않는다. 틀린 작품에 쓰는 것보다 에러가 낫다.
 
-설정은 `harness/config.json`을 `works/<slug>/work.json`이 덮어쓴다. 프롬프트는 `works/<slug>/prompts/<stage>.md`가 있으면 그것, 없으면 `prompts/<stage>.md`.
+## 3층 오버라이드
+
+설정, 프롬프트, 린트 규칙 모두 같은 순서로 쌓인다.
+
+```
+공통 (prompts/, harness/config.json)
+  아래를 장르가 덮어씀 (genres/<genre>/)
+    아래를 작품이 덮어씀 (works/<slug>/)
+```
+
+무협의 "내공"과 판타지의 "마나"는 같은 자리에 들어가는 다른 값이다. 장르 층이 없으면 작품마다 같은 내용을 복사하게 되고, 복사본은 갈라진다.
 
 ## 단계 두 층
 
 현재 `STAGES = (design, draft, review, extract)`는 전부 회차 단위다. 작품 단위 단계를 위에 얹는다.
 
-**작품 이전 / 작품 단위 (회차 번호 없음)**
+**작품 단위 (회차 번호 없음)**
 
 | 단계 | 하는 일 | 산출 | 실행기 |
 |---|---|---|---|
 | `scan` | 문피아, 카카오페이지, 네이버시리즈, 리디 랭킹을 교차해 장르 수요와 위험을 뽑는다 | `research/<날짜>-<플랫폼>-<장르>.md` | claude (웹 필요) |
-| `deconstruct` | 남의 작품을 해체해 재사용 모듈로 만든다 | `library/<작품>/분석.md`, `모듈.md` | codex |
+| `deconstruct` | 남의 작품을 해체해 재사용 모듈로 만든다 | `library/<작품>/` | codex |
 | `concept` | 기획안 여러 개를 내고 차이를 드러낸다 | `works/<slug>/plots/` | claude |
-| `bible` | contract와 canon 초안 | `works/<slug>/story/` 초안 | codex |
+| `bible` | contract와 canon 초안을 장르 스키마에 맞춰 만든다 | `works/<slug>/story/` | codex |
+| `worldcheck` | 세계관 구멍을 캐묻는다 | `works/<slug>/story/ideas.md`에 `[구멍]` | codex |
 
 지금 claude.ai와 ChatGPT에서 하시는 일이 `scan`과 `concept`이다. 기록이 안 남는 것이 문제다. 하네스로 들어오면 입력 hash와 출력이 `runs/`에 남는다.
 
@@ -80,26 +113,40 @@ webnovel-writer/
 
 **모델 없이 도는 검사**
 
-`lint`, `continuity`, `check`(기존), `render`.
+`lint`, `continuity`, `worldcheck --strict`, `check`(기존), `render`.
 
 ## 실행기를 단계별로 고른다
 
-Codex는 read-only sandbox라 웹을 못 본다. `scan`과 `concept`은 웹이 필요하다. config에 단계별 실행기를 둔다.
+Codex는 read-only sandbox라 웹을 못 본다. `scan`과 `concept`은 웹이 필요하다.
 
 ```json
 "runner": {
-  "scan": "claude",
-  "concept": "claude",
-  "deconstruct": "codex",
+  "scan": "claude", "concept": "claude",
+  "deconstruct": "codex", "bible": "codex", "worldcheck": "codex",
   "design": "codex", "draft": "codex", "review": "codex", "extract": "codex"
 }
 ```
 
 `claude` 실행기는 `claude -p` 헤드리스다. 조사 결과는 사람이 승인하기 전까지 자료일 뿐이다. 기존 승인 규칙이 그대로 걸린다.
 
+## 세계관 구멍 검사
+
+가장 자주 깨지는 셋은 거리와 시간, 정보 전달 속도, 인구 규모다. 셋 다 장르와 무관하다.
+
+### 결정론적 부분 (worldcheck.py)
+
+1. **필수 항목 공백**. `genres/<genre>/canon-schema.md`가 요구하는 항목이 `story/canon.md`에 있나. 무협이면 시대, 나라와 경계, 주요 지역, 거리표, 이동 수단과 하루 이동 거리, 문파 목록과 세력 관계, 무공 체계(내공 유무, 경지 구분, 습득 난이도), 관과 강호의 관계, 화폐와 물가, 정보 전달 속도. 판타지면 종족, 마법 체계(원천, 대가, 희소성), 신앙과 신의 개입 여부가 그 자리를 대신한다.
+2. **미등록 고유명사**. 설계와 원고에 나온 지명, 문파명, 무공명이 canon에 등록돼 있나. 없으면 새로 만든 것인지 오타인지 사람이 판단한다.
+3. **거리와 시간 모순**. canon 거리표에 "A에서 B까지 닷새"가 있는데 원고가 이틀 만에 보낸다. 거리표가 있을 때만 돈다.
+4. **존재 여부 모순**. canon이 "이 세계에 내공은 없다"고 정해 놓고 원고에 내공이 나온다. 스키마의 존재 플래그와 원고 어휘를 대조한다.
+
+### 모델 부분
+
+`genres/<genre>/checklist.md`로 캐묻는다. 구멍은 `story/ideas.md`에 `[구멍]`으로 적는다. `[제안]`과 같은 취급이다. canon을 직접 못 고친다.
+
 ## 상태 모델: 복선과 지식
 
-여기가 이번 설계의 핵심이다. oh-story가 수백 화를 버티는 이유는 skill 개수가 아니라 이 두 가지를 분리해서 추적하기 때문이다.
+수백 화를 버티는 실제 이유는 skill 개수가 아니라 이 둘을 분리 추적하는 것이다.
 
 ### 복선 대장
 
@@ -118,9 +165,11 @@ Codex는 read-only sandbox라 웹을 못 본다. `scan`과 `concept`은 웹이 �
 
 `상태`는 미회수, 회수됨, 폐기 셋이다. 폐기는 흔적을 남긴다. 조용히 사라지지 않는다.
 
+`마환` 유형은 무협 전용이다. 장르별 이벤트 유형은 `genres/<genre>/`가 더한다.
+
 ### 작가 진실과 독자 기지
 
-지금 `집필제외` 마커가 canon.md에서 미래 정보를 가리는 것이 이 구분의 조잡한 버전이다. 가려지는 대상이 문서 구간이지 사실이 아니라서, "인물 A는 알지만 독자는 모른다"를 표현할 수 없다.
+지금 `집필제외` 마커가 canon.md에서 미래 정보를 가리는 것이 이 구분의 조잡한 버전이다. 가려지는 대상이 문서 구간이지 사실이 아니라서 "인물 A는 알지만 독자는 모른다"를 표현할 수 없다.
 
 `믿음` 유형이 인물 지식을, `공개` 유형이 독자 인지 시점을 맡는다. 둘 다 이미 있다. 규칙만 박으면 된다.
 
@@ -151,7 +200,7 @@ Codex는 read-only sandbox라 웹을 못 본다. `scan`과 `concept`은 웹이 �
 | 상투어 밀도 (`문득`, `천천히`, `깊게 숨을`) | advisory |
 | 기계적 나열 (불릿 3연속, 첫째/둘째) | blocking |
 
-출력은 `파일:줄:칸 [등급] 규칙명 (해당 구간)`이다. 모델을 안 부른다. `wn-humanize` skill은 이 린트가 잡은 뒤 남는 판단 영역을 맡는다.
+출력은 `파일:줄:칸 [등급] 규칙명 (해당 구간)`이다. 모델을 안 부른다. `wn-humanize` skill은 이 린트가 잡은 뒤 남는 판단 영역을 맡는다. 장르별 추가 규칙은 `genres/<genre>/lint-rules.json`이 더한다.
 
 ### continuity — 결정론적 정합성
 
@@ -167,11 +216,15 @@ Codex는 read-only sandbox라 웹을 못 본다. `scan`과 `concept`은 웹이 �
 
 `draft`는 `--from-run <design run>` 없이 돌지 않는다. 설계 없는 초고를 막는다. 지금은 선택 인자라 그냥 돈다.
 
-## 리뷰를 관점별로 쪼갠다
+## 리뷰는 다관점 병렬과 결정론 둘 다
 
-현재 `review`는 codex 한 번 호출이다. 관점 네 개로 나눠 병렬로 돌리고 합친다. 구조, 인물, 문체, 설정. 스키마는 지금 `schemas/review.schema.json`을 그대로 쓴다. 인용 실존 확인(`check`)은 합친 뒤에 한 번 돈다.
+현재 `review`는 codex 한 번 호출이다. 두 갈래로 나눈다.
 
-한 시선이 놓치는 것을 다른 시선이 잡는다. 같은 모델을 네 번 부르는 것으로도 효과가 난다.
+**결정론적 층** (`lint`, `continuity`, `worldcheck --strict`, `check`). 모델 없이 먼저 돈다. 여기서 잡히는 것은 판단 대상이 아니라 사실이다.
+
+**다관점 층**. 관점 네 개를 병렬로 돌리고 합친다. 구조, 인물, 문체, 설정. 스키마는 지금 `schemas/review.schema.json`을 그대로 쓴다. 설정 관점은 `genres/<genre>/checklist.md`를 읽는다. 인용 실존 확인(`check`)은 합친 뒤에 한 번 돈다.
+
+한 시선이 놓치는 것을 다른 시선이 잡는다. 같은 모델을 네 번 부르는 것으로도 효과가 난다. 채택과 기각은 그대로 사람이 한다.
 
 ## 다른 하네스를 계속 참고한다
 
@@ -181,18 +234,22 @@ Codex는 read-only sandbox라 웹을 못 본다. `scan`과 `concept`은 웹이 �
 
 | 단계 | 내용 | 막는 것 |
 |---|---|---|
-| 1 | 레이아웃 이동, `Project` 루트 분리, `--work` | 이후 작업이 전부 여기 얹힘 |
-| 2 | `복선` 유형, `context-card.md` 렌더, `continuity` | 100화에서의 복선 유실 |
-| 3 | `lint` | 문체 리뷰를 사람이 매번 손으로 하는 것 |
-| 4 | `draft` 게이트, 관점별 review | 설계 없는 초고, 한쪽 눈 검수 |
-| 5 | `scan`, `concept`, `deconstruct`와 claude 실행기 | 기획 단계가 기록 없이 채팅에서 증발하는 것 |
+| 1 | 레이아웃 이동, `Project` 루트 분리, `--work`, `work.json`의 genre와 status | 이후 작업이 전부 여기 얹힘 |
+| 2 | `genres/무협/` 채우기, `bible`, `worldcheck` | 세계관 구멍을 100화에서 발견하는 것 |
+| 3 | `복선` 유형, `context-card.md` 렌더, `continuity` | 복선 유실 |
+| 4 | `lint` | 문체 리뷰를 사람이 매번 손으로 하는 것 |
+| 5 | `draft` 게이트, 다관점 review | 설계 없는 초고, 한쪽 눈 검수 |
+| 6 | `scan`, `concept`, `deconstruct`와 claude 실행기 | 기획 단계가 기록 없이 채팅에서 증발하는 것 |
+| 7 | `genres/판타지/` | – |
 
-1단계를 먼저 하는 이유는 나머지가 전부 경로에 의존하기 때문이다. 5단계가 마지막인 이유는 지금 claude.ai에서 해도 당장 안 깨지기 때문이다.
+1단계가 먼저인 이유는 나머지가 전부 경로에 의존하기 때문이다. 2단계를 3단계보다 먼저 두는 이유는 「마환」이 지금 1화라서 세계관을 고칠 수 있는 마지막 구간이기 때문이다. 6단계가 뒤인 이유는 지금 claude.ai에서 해도 당장 안 깨지기 때문이다. 7단계는 판타지 작품을 실제로 시작할 때 한다. 미리 만들면 무협에서 배운 것이 안 들어간다.
 
 ## 안 하기로 한 것
 
 - **git submodule**. 단일 레포로 간다. 하네스를 공개하지 않으므로 분리 이유가 없다.
+- **`spikes/` 디렉터리**. 승격할 때 경로가 바뀌어 run 기록이 어긋난다. `work.json`의 `status`로 대신한다.
 - **대시보드**. oh-story에 있지만 원고는 파일이고 에디터가 이미 있다.
 - **표지 생성**. 집필과 파이프라인이 다르다. 필요하면 그때 따로 만든다.
 - **`_tracking-state.json` 같은 단일 JSON 권위**. `events.md`가 이미 파싱 가능한 블록 구조이고 사람이 읽을 수 있다. 뷰를 두 가지 방식으로 파생시켜야 할 일이 생기기 전까지는 JSON을 두지 않는다.
-- **중국 플랫폼 扫榜**. 한국 무협에 안 맞는다. `scan`은 한국 플랫폼으로 다시 만든다.
+- **중국 플랫폼 扫榜**. 한국 무협과 판타지에 안 맞는다. `scan`은 한국 플랫폼으로 다시 만든다.
+- **장르를 작품 설정으로만 두는 것**. 무협과 판타지가 같은 자리에 다른 값을 넣으므로, 장르 층 없이는 작품마다 복사본이 생기고 갈라진다.
